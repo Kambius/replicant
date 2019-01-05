@@ -1,0 +1,13 @@
+language: scala
+
+sudo: required
+
+dist: trusty
+
+scala:
+  - 2.12.8
+
+jdk:
+  - oraclejdk8
+
+script: sbt ++$TRAVIS_SCALA_VERSION validate
