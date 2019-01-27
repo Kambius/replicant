@@ -179,7 +179,7 @@ object StorageApp {
       val system = ActorSystem[Nothing](behavior(c), "cluster-system", config)
 
       system.whenTerminated.onComplete {
-        case Success(_) => logger.info("Bue!")
+        case Success(_) => logger.info("Bye!")
         case Failure(e) => logger.error("Actor system terminated with failure", e)
       }(system.executionContext)
     }
