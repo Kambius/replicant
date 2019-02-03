@@ -27,7 +27,8 @@ class StorageController(storageManager: ActorRef[StorageCommand], system: ActorS
       post {
         entity(as[StorageOperation]) {
           case Get(key) =>
-            val response: Future[StorageDataResult] = storageManager ? (ref => StorageCommand.Get(key, ref))
+            val response: Future[StorageDataResult] =
+              storageManager ? (ref => StorageCommand.Get(key, ref))
 
             onComplete(response) {
               case Success(StorageResult.Data(value))  => complete(value)
@@ -35,9 +36,9 @@ class StorageController(storageManager: ActorRef[StorageCommand], system: ActorS
               case _                                   => complete(StatusCodes.InternalServerError)
             }
 
-          case Put(key, value) =>
+          case Put(key, value, consistency) =>
             val response: Future[StorageModificationResult] =
-              storageManager ? (ref => StorageCommand.Put(key, value, ref))
+              storageManager ? (ref => StorageCommand.Put(key, value, ref, consistency))
 
             onComplete(response) {
               case Success(StorageResult.Success)      => complete(StatusCodes.OK)
@@ -45,9 +46,9 @@ class StorageController(storageManager: ActorRef[StorageCommand], system: ActorS
               case _                                   => complete(StatusCodes.InternalServerError)
             }
 
-          case Del(key) =>
+          case Del(key, consistency) =>
             val response: Future[StorageModificationResult] =
-              storageManager ? (ref => StorageCommand.Del(key, ref))
+              storageManager ? (ref => StorageCommand.Del(key, ref, consistency))
 
             onComplete(response) {
               case Success(StorageResult.Success)      => complete(StatusCodes.OK)
@@ -61,9 +62,9 @@ class StorageController(storageManager: ActorRef[StorageCommand], system: ActorS
 
 object StorageController {
   sealed trait StorageOperation
-  final case class Get(key: String)                extends StorageOperation
-  final case class Put(key: String, value: String) extends StorageOperation
-  final case class Del(key: String)                extends StorageOperation
+  final case class Get(key: String)                                  extends StorageOperation
+  final case class Put(key: String, value: String, consistency: Int) extends StorageOperation
+  final case class Del(key: String, consistency: Int)                extends StorageOperation
 
   object StorageOperation {
     private implicit val getDecoder: Decoder[Get] = deriveDecoder

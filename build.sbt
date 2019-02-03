@@ -45,7 +45,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"         %% "akka-slf4j"         % akkaV,
   "com.typesafe.akka"         %% "akka-http"          % "10.1.7",
   "org.fusesource.leveldbjni" % "leveldbjni-all"      % "1.8",
-  "org.xerial"                % "sqlite-jdbc"         % "3.7.2",
+  "com.h2database"            % "h2"                  % "1.4.197",
   "org.scalikejdbc"           %% "scalikejdbc"        % "3.3.2",
   "io.circe"                  %% "circe-core"         % circeV,
   "io.circe"                  %% "circe-generic"      % circeV,

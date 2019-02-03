@@ -1,19 +1,26 @@
 package io.replicant
 
 import akka.actor
-import akka.actor.typed._
 import akka.actor.typed.scaladsl._
 import akka.actor.typed.scaladsl.adapter._
+import akka.actor.typed.{ActorContext, _}
 import akka.cluster.ClusterEvent.MemberEvent
 import akka.cluster.pubsub.{DistributedPubSub, DistributedPubSubMediator => PubSub}
 import akka.cluster.typed.{Cluster, Subscribe}
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
-import io.replicant.StorageManager.{StorageCommand, StorageModificationCommand}
+import io.replicant.StorageManager.{
+  StorageCommand,
+  StorageModificationCommand,
+  StorageModificationResult,
+  StorageResult
+}
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.duration._
+import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
 object ClusterListener {
@@ -51,7 +58,14 @@ object DataReplicator {
 
       Behaviors.receiveMessage {
         case Replicate(data) =>
-          mediator ! PubSub.Publish(topic, data)
+          val requestActor = context.spawnAnonymous(RequestActor.behavior(data.replyTo, data.consistencyLevel))
+
+          val swapped = data match {
+            case p: StorageCommand.Put => p.copy(replyTo = requestActor)
+            case d: StorageCommand.Del => d.copy(replyTo = requestActor)
+          }
+
+          mediator ! PubSub.Publish(topic, swapped)
           Behaviors.same
 
         case ReplicatedCommand(command) =>
@@ -65,6 +79,68 @@ object DataReplicator {
     }
 }
 
+object BehaviorUtil {
+  def adapter[A, B](original: Behavior[B])(transform: A => B)(implicit ct: ClassTag[A]): Behavior[A] =
+    Behaviors.intercept(new BehaviorInterceptor[A, B] {
+      override def aroundReceive(
+          ctx: ActorContext[A],
+          msg: A,
+          target: BehaviorInterceptor.ReceiveTarget[B]
+      ): Behavior[B] =
+        if (ct.runtimeClass.isInstance(msg)) {
+          target(ctx, transform(msg))
+        } else {
+          target(ctx, msg.asInstanceOf[B])
+        }
+
+      override def aroundSignal(
+          ctx: ActorContext[A],
+          signal: Signal,
+          target: BehaviorInterceptor.SignalTarget[B]
+      ): Behavior[B] = target(ctx, signal)
+    })(original)
+}
+
+object RequestActor {
+  sealed trait RequestMsg
+  final case class Result(result: StorageModificationResult) extends RequestMsg
+  case object Timeout                                        extends RequestMsg
+
+  private final val TimeoutTimer: String = "timeout"
+
+  def internalBehavior(replyTo: ActorRef[StorageModificationResult], consistencyLevel: Int): Behavior[RequestMsg] =
+    Behaviors.withTimers { scheduler =>
+      scheduler.startSingleTimer(TimeoutTimer, Timeout, 1.second)
+
+      def waitResponses(countDown: Int): Behavior[RequestMsg] =
+        Behaviors.receive {
+          case (_, Result(StorageResult.Success)) =>
+            val nextCount = countDown - 1
+            if (nextCount > 0) {
+              waitResponses(nextCount)
+            } else {
+              replyTo ! StorageResult.Success
+              Behaviors.stopped
+            }
+
+          case (ctx, Result(StorageResult.Failure(error))) =>
+            ctx.log.warning("Storage failure: {}", error)
+            Behaviors.same
+
+          case (ctx, Timeout) =>
+            ctx.log.warning("Request timeout. Count down: {}", countDown)
+            replyTo ! StorageResult.Failure("Request timeout")
+            Behaviors.stopped
+        }
+
+      waitResponses(consistencyLevel)
+    }
+
+  def behavior(replyTo: ActorRef[StorageModificationResult],
+               consistencyLevel: Int): Behavior[StorageModificationResult] =
+    BehaviorUtil.adapter[StorageModificationResult, RequestMsg](internalBehavior(replyTo, consistencyLevel))(Result)
+}
+
 object StorageManager {
   sealed trait StorageResult
   sealed trait StorageDataResult         extends StorageResult
@@ -76,7 +152,11 @@ object StorageManager {
   }
 
   sealed trait StorageCommand
-  sealed trait StorageModificationCommand extends StorageCommand
+  sealed trait StorageModificationCommand extends StorageCommand {
+    def replyTo: ActorRef[StorageModificationResult]
+    def consistencyLevel: Int
+  }
+
   object StorageCommand {
     final case class Get(
         key: String,
@@ -86,12 +166,14 @@ object StorageManager {
     final case class Put(
         key: String,
         value: String,
-        replyTo: ActorRef[StorageModificationResult]
+        replyTo: ActorRef[StorageModificationResult],
+        consistencyLevel: Int
     ) extends StorageModificationCommand
 
     final case class Del(
         key: String,
-        replyTo: ActorRef[StorageModificationResult]
+        replyTo: ActorRef[StorageModificationResult],
+        consistencyLevel: Int
     ) extends StorageModificationCommand
   }
 
@@ -121,12 +203,12 @@ object StorageManager {
 
         Behaviors.same
 
-      case StorageCommand.Put(key, value, replyTo) =>
+      case StorageCommand.Put(key, value, replyTo, _) => // TODO: remove consistency level
         storage.put(key, value)
         replyTo ! StorageResult.Success
         Behaviors.same
 
-      case StorageCommand.Del(key, replyTo) =>
+      case StorageCommand.Del(key, replyTo, _) =>
         storage.del(key)
         replyTo ! StorageResult.Success
         Behaviors.same
@@ -146,7 +228,7 @@ object StorageApp {
       implicit val mat: ActorMaterializer       = ActorMaterializer()
       implicit val ec: ExecutionContextExecutor = context.system.executionContext
 
-      val storage = new SqliteStorage(s"./data/stored-data-${config.apiPort}.db")
+      val storage = new EmbeddedDbStorage(s"./data/stored-data-${config.apiPort}")
       val service = new BasicStorageService(storage)
 
       val storageManager = context.spawn(StorageManager.behaviorWithReplicator(service), "storage-manager")
