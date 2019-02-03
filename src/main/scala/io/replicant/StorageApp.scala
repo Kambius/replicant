@@ -10,7 +10,12 @@ import akka.cluster.typed.{Cluster, Subscribe}
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
-import io.replicant.StorageManager.{StorageCommand, StorageModificationCommand, StorageModificationResult, StorageResult}
+import io.replicant.StorageManager.{
+  StorageCommand,
+  StorageModificationCommand,
+  StorageModificationResult,
+  StorageResult
+}
 import kamon.Kamon
 import org.slf4j.LoggerFactory
 
