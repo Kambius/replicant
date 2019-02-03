@@ -1,5 +1,6 @@
 package io.replicant
 
+import kamon.Kamon
 import scalikejdbc._
 
 trait Storage {
@@ -34,7 +35,8 @@ class EmbeddedDbStorage(filename: String) extends Storage {
   )
   """.execute().apply()
 
-  override def get(key: String): Option[(String, Meta)] =
+  override def get(key: String): Option[(String, Meta)] = {
+    Kamon.counter("storage.get").increment()
     sql"""
     SELECT value, version, modification_time, deleted FROM data
     WHERE key = $key AND version = (
@@ -44,8 +46,10 @@ class EmbeddedDbStorage(filename: String) extends Storage {
       .map(r => (r.string("value"), Meta(r.long("version"), r.long("modification_time"), r.boolean("deleted"))))
       .single()
       .apply()
+  }
 
   override def put(key: String, value: String, meta: Meta): Unit = {
+    Kamon.counter("storage.put").increment()
     sql"""
     INSERT INTO data (key, value, version, modification_time, deleted)
     VALUES ($key, $value, ${meta.version}, ${meta.modificationTime}, ${meta.deleted})
@@ -54,6 +58,7 @@ class EmbeddedDbStorage(filename: String) extends Storage {
   }
 
   override def del(key: String): Unit = {
+    Kamon.counter("storage.del").increment()
     sql"""
     DELETE FROM data
     WHERE key = $key

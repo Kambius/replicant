@@ -52,6 +52,8 @@ libraryDependencies ++= Seq(
   "io.circe"                  %% "circe-parser"       % circeV,
   "de.heikoseeberger"         %% "akka-http-circe"    % "1.23.0",
   "org.typelevel"             %% "cats-core"          % "1.5.0",
+  "io.kamon"                  %% "kamon-core"         % "1.1.5",
+  "io.kamon"                  %% "kamon-prometheus"   % "1.1.1",
   "org.scalatest"             %% "scalatest"          % "3.0.5" % Test,
   "com.github.ghik"           %% "silencer-lib"       % silencerV % Provided
 )

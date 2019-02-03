@@ -10,12 +10,8 @@ import akka.cluster.typed.{Cluster, Subscribe}
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
-import io.replicant.StorageManager.{
-  StorageCommand,
-  StorageModificationCommand,
-  StorageModificationResult,
-  StorageResult
-}
+import io.replicant.StorageManager.{StorageCommand, StorageModificationCommand, StorageModificationResult, StorageResult}
+import kamon.Kamon
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContextExecutor
@@ -266,6 +262,8 @@ object StorageApp {
       }(system.executionContext)
     }
 
-  def main(args: Array[String]): Unit =
+  def main(args: Array[String]): Unit = {
+    Kamon.loadReportersFromConfig()
     startup(Seq(MainConfig(2551, 9001), MainConfig(2552, 9002), MainConfig(0, 9000)))
+  }
 }
