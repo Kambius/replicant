@@ -1,9 +1,9 @@
 package io.replicant
 
 import akka.actor
+import akka.actor.typed._
 import akka.actor.typed.scaladsl._
 import akka.actor.typed.scaladsl.adapter._
-import akka.actor.typed.{ActorContext, _}
 import akka.cluster.ClusterEvent.MemberEvent
 import akka.cluster.pubsub.{DistributedPubSub, DistributedPubSubMediator => PubSub}
 import akka.cluster.typed.{Cluster, Subscribe}
@@ -84,7 +84,7 @@ object BehaviorUtil {
   def adapter[A, B](original: Behavior[B])(transform: A => B)(implicit ct: ClassTag[A]): Behavior[A] =
     Behaviors.intercept(new BehaviorInterceptor[A, B] {
       override def aroundReceive(
-          ctx: ActorContext[A],
+          ctx: TypedActorContext[A],
           msg: A,
           target: BehaviorInterceptor.ReceiveTarget[B]
       ): Behavior[B] =
@@ -95,7 +95,7 @@ object BehaviorUtil {
         }
 
       override def aroundSignal(
-          ctx: ActorContext[A],
+          ctx: TypedActorContext[A],
           signal: Signal,
           target: BehaviorInterceptor.SignalTarget[B]
       ): Behavior[B] = target(ctx, signal)
