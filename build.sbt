@@ -4,7 +4,7 @@ val silencerV        = "1.3.1"
 val logbackV         = "1.2.3"
 val catsV            = "1.6.0"
 val scalatestV       = "3.0.6"
-val akkaV            = "2.5.21"
+val akkaV            = "2.5.23"
 val circeV           = "0.11.1"
 val akkaHttpV        = "10.1.7"
 val h2V              = "1.4.198"
@@ -12,11 +12,11 @@ val scalikejdbcV     = "3.3.3"
 val kamonCoreV       = "1.1.5"
 val kamonPrometheusV = "1.1.1"
 val akkaHttpCirceV   = "1.25.2"
-val fastparceV       = "2.1.0"
 val kindProjectorV   = "0.9.9"
 
-lazy val commonSettings = Seq(
-  scalaVersion := "2.12.8",
+lazy val replicantSettings = Seq(
+  name := "replicant",
+  version := "0.1",
   scalacOptions ++= Seq(
     "-deprecation",
     "-feature",
@@ -41,20 +41,6 @@ lazy val commonSettings = Seq(
     "-Xlint:_"
   ),
   libraryDependencies ++= Seq(
-    "org.typelevel"   %% "cats-core"    % catsV,
-    "org.scalatest"   %% "scalatest"    % scalatestV % Test,
-    "com.github.ghik" %% "silencer-lib" % silencerV % Provided
-  ),
-  libraryDependencies ++= Seq(
-    compilerPlugin("org.spire-math"  %% "kind-projector"  % kindProjectorV),
-    compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerV)
-  )
-)
-
-lazy val storageSettings = Seq(
-  name := "storage",
-  version := "0.1",
-  libraryDependencies ++= Seq(
     "ch.qos.logback"    % "logback-core"        % logbackV,
     "ch.qos.logback"    % "logback-classic"     % logbackV,
     "com.typesafe.akka" %% "akka-actor-typed"   % akkaV,
@@ -68,36 +54,18 @@ lazy val storageSettings = Seq(
     "io.circe"          %% "circe-parser"       % circeV,
     "de.heikoseeberger" %% "akka-http-circe"    % akkaHttpCirceV,
     "io.kamon"          %% "kamon-core"         % kamonCoreV,
-    "io.kamon"          %% "kamon-prometheus"   % kamonPrometheusV
-  )
-)
-
-lazy val storage = project
-  .in(file("storage"))
-  .settings(commonSettings)
-  .settings(storageSettings)
-  .enablePlugins(JavaAppPackaging)
-
-lazy val idmlSettings = Seq(
-  name := "idml",
-  version := "0.1",
+    "io.kamon"          %% "kamon-prometheus"   % kamonPrometheusV,
+    "org.typelevel"     %% "cats-core"          % catsV,
+    "org.scalatest"     %% "scalatest"          % scalatestV % Test,
+    "com.github.ghik"   %% "silencer-lib"       % silencerV % Provided
+  ),
   libraryDependencies ++= Seq(
-    "com.lihaoyi" %% "fastparse" % fastparceV
+    compilerPlugin("org.spire-math"  %% "kind-projector"  % kindProjectorV),
+    compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerV)
   )
-)
-
-lazy val idml = project
-  .in(file("idml"))
-  .settings(commonSettings)
-  .settings(idmlSettings)
-
-lazy val replicantProjects = Seq(
-  storage,
-  idml
 )
 
 lazy val replicant = project
   .in(file("."))
-  .settings(commonSettings)
-  .dependsOn(replicantProjects.map(p => p: ClasspathDep[ProjectReference]): _*)
-  .aggregate(replicantProjects.map(p => p: ProjectReference): _*)
+  .settings(replicantSettings)
+  .enablePlugins(JavaAppPackaging)
