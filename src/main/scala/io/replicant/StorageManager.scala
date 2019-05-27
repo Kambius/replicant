@@ -22,14 +22,14 @@ object StorageManager {
       replyTo: ActorRef[StorageModificationResult]
   ) extends StorageCommand
 
-  def behavior(storage: Storage): Behavior[StorageCommand] =
+  val behavior: Behavior[StorageCommand] =
     Behaviors.receive {
       case (ctx, get: Get) =>
-        ctx.spawnAnonymous(GetRequestActor.behavior(storage, get))
+        ctx.spawnAnonymous(GetRequestActor.behavior(get))
         Behaviors.same
 
       case (ctx, put: Put) =>
-        ctx.spawnAnonymous(PutRequestActor.behavior(storage, put))
+        ctx.spawnAnonymous(PutRequestActor.behavior(put))
         Behaviors.same
     }
 }

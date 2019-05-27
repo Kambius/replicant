@@ -1,5 +1,8 @@
 package io.replicant
 
+import java.io.{File, PrintWriter}
+import java.nio.file.{Files, Paths}
+
 import akka.actor
 import akka.actor.typed._
 import akka.actor.typed.scaladsl._
@@ -11,9 +14,27 @@ import kamon.Kamon
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContextExecutor
-import scala.util.{Failure, Success}
+import scala.io.Source
+import scala.util.{Failure, Random, Success}
 
-final case class MainConfig(communicationPort: Int, apiPort: Int)
+final case class MainConfig(communicationPort: Int, apiPort: Int, hashingLabel: Int)
+
+object MainConfig {
+  def init(communicationPort: Int, apiPort: Int, hashingFile: String): MainConfig =
+    if (Files.exists(Paths.get(hashingFile))) {
+      val s            = Source.fromFile(hashingFile, "UTF-8")
+      val hashingLabel = s.mkString.toInt
+      s.close()
+      MainConfig(communicationPort, apiPort, hashingLabel)
+    } else {
+      println("1" * 30)
+      val hashingLabel = Random.nextInt()
+      val w            = new PrintWriter(new File(hashingFile))
+      w.print(hashingLabel)
+      w.close()
+      MainConfig(communicationPort, apiPort, hashingLabel)
+    }
+}
 
 object StorageApp {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -30,7 +51,7 @@ object StorageApp {
 
       val storage = new EmbeddedDbStorage(s"./data/stored-data-${config.apiPort}")
 
-      val storageManager = ctx.spawn(StorageManager.behavior(storage), "storage-manager")
+      val storageManager = ctx.spawn(StorageManager.behavior, "storage-manager")
 
       ctx.spawn(ReplicationManager.behavior(storage), ReplicationManager.Name)
 
@@ -56,7 +77,8 @@ object StorageApp {
       logger.info(s"Starting app [communication port: ${c.communicationPort}; api port: ${c.apiPort}]")
 
       val config = ConfigFactory
-        .parseString(s"akka.remote.netty.tcp.port=${c.communicationPort}")
+        .parseString(s"""akka.remote.netty.tcp.port = ${c.communicationPort}
+                        |akka.cluster.roles = ["${c.hashingLabel}"]""".stripMargin)
         .withFallback(ConfigFactory.load())
 
       val system = ActorSystem[Nothing](behavior(c), Name, config)
@@ -69,6 +91,10 @@ object StorageApp {
 
   def main(args: Array[String]): Unit = {
     Kamon.loadReportersFromConfig()
-    startup(Seq(MainConfig(2551, 9001), MainConfig(2552, 9002), MainConfig(2553, 9000)))
+    startup(
+      Seq(MainConfig.init(2551, 9001, "data/hash-9001.dat"),
+          MainConfig.init(2552, 9002, "data/hash-9002.dat"),
+          MainConfig.init(2553, 9000, "data/hash-9000.dat"))
+    )
   }
 }

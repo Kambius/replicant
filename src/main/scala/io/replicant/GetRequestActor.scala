@@ -4,7 +4,6 @@ import akka.actor.RootActorPath
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter._
-import akka.cluster.MemberStatus
 import akka.cluster.typed.Cluster
 import cats.syntax.partialOrder._
 import io.replicant.common.instances.vectorclock._
@@ -59,24 +58,27 @@ object GetRequestActor {
         Behaviors.stopped
     }
 
-  def behavior(storage: Storage, req: StorageManager.Get): Behavior[GetFlowCommand] =
+  def behavior(req: StorageManager.Get): Behavior[GetFlowCommand] =
     Behaviors.withTimers { scheduler =>
       scheduler.startSingleTimer(TimeoutTimer, Timeout, ReadTimeout)
 
       Behaviors.setup { ctx =>
-        val cluster = Cluster(ctx.system)
+        val replicationLevel = ctx.system.settings.config.getInt("replicant.replication-level")
 
-        if (req.replicas > 1) {
-          cluster.state.members.filter(m => m.status == MemberStatus.Up && m != cluster.selfMember).foreach { m =>
+        if (req.replicas <= 0 || req.replicas > replicationLevel) {
+          req.replyTo ! StorageResult.Failure("Invalid replicas count")
+          Behaviors.stopped
+        } else {
+          val cluster    = Cluster(ctx.system)
+          val replicaSet = ConsistentHashing.getReplicaSet(cluster.state.members, replicationLevel, req.key)
+
+          replicaSet.foreach { m =>
             ctx.toUntyped
               .actorSelection(RootActorPath(m.address) / "user" / ReplicationManager.Name) ! ReplicationManager
               .Get(req.key, ctx.self)
           }
 
-          waitResponses(req, Seq(storage.get(req.key)))
-        } else {
-          req.replyTo ! resolveValues(Seq(storage.get(req.key)))
-          Behaviors.stopped
+          waitResponses(req, Nil)
         }
       }
     }
