@@ -27,7 +27,6 @@ object MainConfig {
       s.close()
       MainConfig(communicationPort, apiPort, hashingLabel)
     } else {
-      println("1" * 30)
       val hashingLabel = Random.nextInt()
       val w            = new PrintWriter(new File(hashingFile))
       w.print(hashingLabel)
@@ -54,6 +53,7 @@ object StorageApp {
       val storageManager = ctx.spawn(StorageManager.behavior, "storage-manager")
 
       ctx.spawn(ReplicationManager.behavior(storage), ReplicationManager.Name)
+      ctx.spawn(StatsActor.behavior(storage), StatsActor.Name)
 
       val controller = new StorageController(storageManager, ctx.system)
 

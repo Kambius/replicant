@@ -10,6 +10,7 @@ trait Storage {
   def get(key: String): Value
   def put(key: String, hash: Int, value: Option[String], clock: Map[String, Int]): Unit
   def range(fromHash: Int, toHash: Int, count: Int): Seq[Entry]
+  def count(): Long
 }
 
 object Storage {
@@ -72,4 +73,10 @@ class EmbeddedDbStorage(file: String) extends Storage {
       .map(r => Entry(r.string("key"), r.string("value"), r.int("hash"), r.string("clock").unsafeAs[Map[String, Int]]))
       .toList()
       .apply()
+
+  override def count(): Long =
+    sql"""
+    SELECT COUNT(*) AS count
+    FROM data
+    """.map(_.long("count")).single.apply().get
 }

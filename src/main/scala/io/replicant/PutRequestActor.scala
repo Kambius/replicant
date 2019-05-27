@@ -6,6 +6,8 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter._
 import akka.cluster.Member
 import akka.cluster.typed.Cluster
+import io.replicant.common.KamonUtil
+import kamon.Kamon
 
 import scala.concurrent.duration._
 
@@ -25,7 +27,7 @@ object PutRequestActor {
 
   private def waitResponses(req: StorageManager.Put, collectedResponses: Int): Behavior[PutFlowCommand] =
     Behaviors.receive {
-      case (_, ReplicaResponse(successful)) =>
+      case (ctx, ReplicaResponse(successful)) =>
         if (successful) {
           val nextCollected = collectedResponses + 1
           if (nextCollected == req.replicas) {
@@ -35,11 +37,13 @@ object PutRequestActor {
             waitResponses(req, nextCollected)
           }
         } else {
+          Kamon.counter("error.old_data").refine(KamonUtil.mkNodeTag(ctx)).increment()
           req.replyTo ! StorageResult.Failure("Outdated data")
           Behaviors.stopped
         }
 
       case (ctx, Timeout) =>
+        Kamon.counter("error.put_timeout").refine(KamonUtil.mkNodeTag(ctx)).increment()
         ctx.log.warning("Request timeout. Collected {} of {} responses", collectedResponses, req.replicas)
         req.replyTo ! StorageResult.Failure("Request timeout")
         Behaviors.stopped

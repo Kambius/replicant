@@ -6,7 +6,9 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter._
 import akka.cluster.typed.Cluster
 import cats.syntax.partialOrder._
+import io.replicant.common.KamonUtil
 import io.replicant.common.instances.vectorclock._
+import kamon.Kamon
 
 import scala.concurrent.duration._
 
@@ -53,6 +55,7 @@ object GetRequestActor {
         }
 
       case (ctx, Timeout) =>
+        Kamon.counter("error.get_timeout").refine(KamonUtil.mkNodeTag(ctx)).increment()
         ctx.log.warning("Request timeout. Collected {} of {} values", collectedValues.size, req.replicas)
         req.replyTo ! StorageResult.Failure("Request timeout")
         Behaviors.stopped
