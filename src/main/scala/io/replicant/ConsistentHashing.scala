@@ -7,15 +7,17 @@ object ConsistentHashing {
     val sorted = members
       .filter(_.status == MemberStatus.Up)
       .toSeq
-      .map(m => m -> m.roles.head.toInt)
-      .sortBy(_._2)(Ordering[Int].reverse)
+      .flatMap(m => m.roles.head.split(",").map(_.toInt).map(m -> _))
+      .sortBy(_._2)
 
-    val idx = sorted.indexWhere(_._2 <= key.##)
+    val idx = sorted.reverse.indexWhere(_._2 <= key.##)
 
-    val fixedIdx = if (idx == -1) sorted.size - 1 else idx
+    val fixedIdx = if (idx == -1) sorted.size - 1 else sorted.size - idx - 1
 
-    (sorted.slice(fixedIdx, fixedIdx + replicationLevel) ++ sorted.take(fixedIdx + replicationLevel - sorted.size))
+    (sorted.drop(fixedIdx) ++ sorted.take(fixedIdx + 1))
       .map(_._1)
-      .toSet
+      .scanLeft(Set.empty[Member])(_ + _)
+      .find(_.size == replicationLevel)
+      .get
   }
 }

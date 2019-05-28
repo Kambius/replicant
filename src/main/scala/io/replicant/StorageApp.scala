@@ -17,21 +17,21 @@ import scala.concurrent.ExecutionContextExecutor
 import scala.io.Source
 import scala.util.{Failure, Random, Success}
 
-final case class MainConfig(communicationPort: Int, apiPort: Int, hashingLabel: Int)
+final case class MainConfig(communicationPort: Int, apiPort: Int, hashingLabels: Seq[Int])
 
 object MainConfig {
   def init(communicationPort: Int, apiPort: Int, hashingFile: String): MainConfig =
     if (Files.exists(Paths.get(hashingFile))) {
-      val s            = Source.fromFile(hashingFile, "UTF-8")
-      val hashingLabel = s.mkString.toInt
+      val s             = Source.fromFile(hashingFile, "UTF-8")
+      val hashingLabels = s.mkString.split(",").filter(_.nonEmpty).map(_.toInt)
       s.close()
-      MainConfig(communicationPort, apiPort, hashingLabel)
+      MainConfig(communicationPort, apiPort, hashingLabels)
     } else {
-      val hashingLabel = Random.nextInt()
+      val hashingLabels = Seq.fill(100)(Random.nextInt())
       val w            = new PrintWriter(new File(hashingFile))
-      w.print(hashingLabel)
+      w.print(hashingLabels.mkString(","))
       w.close()
-      MainConfig(communicationPort, apiPort, hashingLabel)
+      MainConfig(communicationPort, apiPort, hashingLabels)
     }
 }
 
@@ -78,7 +78,7 @@ object StorageApp {
 
       val config = ConfigFactory
         .parseString(s"""akka.remote.netty.tcp.port = ${c.communicationPort}
-                        |akka.cluster.roles = ["${c.hashingLabel}"]""".stripMargin)
+                        |akka.cluster.roles = ["${c.hashingLabels.mkString(",")}"]""".stripMargin)
         .withFallback(ConfigFactory.load())
 
       val system = ActorSystem[Nothing](behavior(c), Name, config)
